@@ -1,10 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/IgorFVicente/api-go-gin/controllers"
@@ -17,6 +19,7 @@ import (
 var ID int
 
 func SetupDasRotasDeTeste() *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
 	rotas := gin.Default()
 	return rotas
 }
@@ -44,7 +47,7 @@ func TestVerificaStatusCodeDaSaudacaoComParametro(t *testing.T) {
 	assert.Equal(t, mockDaResposta, string(respostaBody))
 }
 
-func TestListandoTodosOsAlunosHandler(t *testing.T) {
+func TestListaTodosOsAlunosHandler(t *testing.T) {
 	database.ConectaComBancoDeDados()
 	r := SetupDasRotasDeTeste()
 	CriaAlunoMock()
@@ -54,5 +57,65 @@ func TestListandoTodosOsAlunosHandler(t *testing.T) {
 	resposta := httptest.NewRecorder()
 	r.ServeHTTP(resposta, req)
 	assert.Equal(t, http.StatusOK, resposta.Code)
-	fmt.Println(resposta.Body)
+}
+
+func TestBuscaAlunoPorCPFHandler(t *testing.T) {
+	database.ConectaComBancoDeDados()
+	r := SetupDasRotasDeTeste()
+	CriaAlunoMock()
+	defer DeletaAlunoMock()
+	r.GET("/alunos/cpf/:cpf", controllers.BuscaAlunoPorCPF)
+	req, _ := http.NewRequest("GET", "/alunos/cpf/12345678901", nil)
+	resposta := httptest.NewRecorder()
+	r.ServeHTTP(resposta, req)
+	assert.Equal(t, http.StatusOK, resposta.Code)
+}
+
+func TestBuscaAlunoPorIDHandler(t *testing.T) {
+	database.ConectaComBancoDeDados()
+	CriaAlunoMock()
+	defer DeletaAlunoMock()
+	r := SetupDasRotasDeTeste()
+	r.GET("/alunos/:id", controllers.BuscaAlunoPorId)
+	pathDaBusca := "/alunos/" + strconv.Itoa(ID)
+	req, _ := http.NewRequest("GET", pathDaBusca, nil)
+	resposta := httptest.NewRecorder()
+	r.ServeHTTP(resposta, req)
+	var alunoMock models.Aluno
+	json.Unmarshal(resposta.Body.Bytes(), &alunoMock)
+	assert.Equal(t, "Nome do Aluno Teste", alunoMock.Nome)
+	assert.Equal(t, "12345678901", alunoMock.CPF)
+	assert.Equal(t, "123456789", alunoMock.RG)
+}
+
+func TestDeletaAlunoHandler(t *testing.T) {
+	database.ConectaComBancoDeDados()
+	CriaAlunoMock()
+	r := SetupDasRotasDeTeste()
+	r.DELETE("/alunos/:id", controllers.DeletaAluno)
+	pathDeBusca := "/alunos/" + strconv.Itoa(ID)
+	req, _ := http.NewRequest("DELETE", pathDeBusca, nil)
+	resposta := httptest.NewRecorder()
+	r.ServeHTTP(resposta, req)
+	assert.Equal(t, http.StatusOK, resposta.Code)
+}
+
+func TestEditaUmAlunoHanlde(t *testing.T) {
+	database.ConectaComBancoDeDados()
+	CriaAlunoMock()
+	defer DeletaAlunoMock()
+	r := SetupDasRotasDeTeste()
+	r.PATCH("/alunos/:id", controllers.EditaAluno)
+	aluno := models.Aluno{Nome: "Nome do Aluno Teste Modificado", CPF: "47345678901", RG: "123456700"}
+	valorJson, _ := json.Marshal(aluno)
+	pathDeBusca := "/alunos/" + strconv.Itoa(ID)
+	req, _ := http.NewRequest("PATCH", pathDeBusca, bytes.NewBuffer(valorJson))
+	resposta := httptest.NewRecorder()
+	r.ServeHTTP(resposta, req)
+
+	var alunoMockAualizado models.Aluno
+	json.Unmarshal(resposta.Body.Bytes(), &alunoMockAualizado)
+	assert.Equal(t, "Nome do Aluno Teste Modificado", alunoMockAualizado.Nome)
+	assert.Equal(t, "47345678901", alunoMockAualizado.CPF)
+	assert.Equal(t, "123456700", alunoMockAualizado.RG)
 }

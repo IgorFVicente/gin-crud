@@ -62,22 +62,28 @@ func DeletaAluno(c *gin.Context) {
 func EditaAluno(c *gin.Context) {
 	var aluno models.Aluno
 	id := c.Params.ByName("id")
-	database.DB.First(&aluno, id)
 
-	if err := c.ShouldBindJSON(&aluno); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error()})
+	if err := database.DB.First(&aluno, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Aluno not found"})
 		return
 	}
 
-	if err := models.ValidaDadosDeAluno(&aluno); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"erro": err.Error(),
-		})
+	var inputAluno models.Aluno
+	if err := c.ShouldBindJSON(&inputAluno); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	database.DB.Model(&aluno).UpdateColumns(aluno)
+	if err := models.ValidaDadosDeAluno(&inputAluno); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"erro": err.Error()})
+		return
+	}
+
+	if err := database.DB.Model(&aluno).Updates(inputAluno).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update aluno"})
+		return
+	}
+
 	c.JSON(http.StatusOK, aluno)
 }
 
